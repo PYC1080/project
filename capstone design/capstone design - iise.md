@@ -277,9 +277,11 @@ main()
 ```
 1. 해당 페이지 기사 링크 따오기
 2. 해당 링크 들어가 기사 댓글 총 갯수 파악하기
-3. 파악한 댓글 중 긁어올 댓글 갯수 산정하기
-4. 산정한 댓글 크롤링
-5. 크롤링한 댓글 파일 저장
+3. 신문사 정보 크롤링
+4. 신문 기사 날짜 크롤링
+5. 파악한 댓글 중 긁어올 댓글 갯수 산정하기
+6. 산정한 댓글 크롤링
+7. 크롤링한 댓글 파일 저장
 ```
 
 ## 03.22 오전
@@ -434,8 +436,189 @@ main()
 ### 3) 앞으로 작업할 것
 
 ```
+1. 신문사 정보 크롤링
+2. 신문 기사 날짜 크롤링
+3. 파악한 댓글 중 긁어올 댓글 갯수 산정하기
+4. 산정한 댓글 크롤링
+5. 크롤링한 댓글 파일 저장
+```
+
+## 03.22 오후
+
+```python
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime
+import openpyxl
+from selenium import webdriver
+from selenium.common import exceptions
+import urllib.request
+from urllib import parse
+import pyperclip
+import time
+import math
+import request
+
+
+cd_path = "E:/download folder/chrome_driver/chromedriver.exe"
+md_path = "C:/Users/pyc/Desktop/Work/study/iise/result/"
+
+now_time = datetime.now()
+
+def search_news(driver,search_url):
+
+    # 크롬 웹페이지 - 네이버 url입력
+    driver.get(search_url)
+    driver.implicitly_wait(5)
+
+    #신문사 조건 입력
+    news_option = driver.find_element_by_link_text("언론사")
+    webdriver.ActionChains(driver).click(news_option).perform()
+
+    no_j = driver.find_element_by_class_name("_ca_1025") # 중앙일보
+    no_c = driver.find_element_by_class_name("_ca_1023") # 조선일보
+    no_h = driver.find_element_by_class_name("_ca_1028") # 한겨례
+    no_k = driver.find_element_by_class_name("_ca_1032") # 경향신문
+
+    webdriver.ActionChains(driver).click(no_j).perform()
+    webdriver.ActionChains(driver).click(no_c).perform()
+    webdriver.ActionChains(driver).click(no_h).perform()
+    webdriver.ActionChains(driver).click(no_k).perform()
+
+    time.sleep(2)
+
+    # 신문사 조건 입력 확인 창 클릭
+    ok_btn = driver.find_element_by_css_selector("button.impact._submit_btn")
+    webdriver.ActionChains(driver).click(ok_btn).perform()
+
+
+def crawler(search_url,search_item,search_page,driver):
+
+    #기간 내 뉴스의 총 갯수 파악
+    now_url = driver.page_source
+    now_bs = BeautifulSoup(now_url, "html.parser")
+    # print(now_bs)
+    findNo =  now_bs.find('div', class_="title_desc all_my")
+    totalNo = int(str(findNo).split()[4].replace("건</span></div>","").replace(",",""))
+    # print(totalNo)
+
+    # 검색할 뉴스 페이지 수 구하기
+    pageNo = int(totalNo) * int(search_page) / 1000
+    Max_page = math.floor(int(pageNo))
+    last_page = math.floor(pageNo * 10) - (Max_page*10)
+    now_page = 1
+
+    # 기사 페이지
+    # while now_page <= Max_page:
+    #
+    #     print(now_page)
+    page_url = driver.page_source
+    # print(page_url)
+    page_bs = BeautifulSoup(page_url, "html.parser")
+    # print(page_bs)
+
+    # 해당 페이지에서 네이사 기사에 실린 기사에 해당하는 경우 파싱
+    for i in  page_bs.select("._sp_each_url"):
+        try:
+            if i["href"].startswith("https://news.naver.com"):
+                # print(i["href"])
+                news_url = i["href"]
+                news_url_tail = news_url.replace("https://news.naver.com/main/read.nhn?","")
+                news_url_head =  "https://news.naver.com/main/read.nhn?"
+                news_url_body =  "m_view=1&includeAllCount=true&"
+                total_url = news_url_head + news_url_body + news_url_tail
+                # print(total_url)
+                driver.get(total_url)
+                time.sleep(1)
+
+                repl_url = driver.page_source
+                repl_bs = BeautifulSoup(repl_url,"html.parser")
+
+                # 신문사 정보 파악
+                company_find = repl_bs.find_all('a', target ="_blank")
+                company_find_name = str(company_find[2])
+                cf_name = int(company_find_name.find("title")) + 7
+                total_company_name =  company_find_name[cf_name:].replace("\"/></a>","")
+                print(total_company_name)
+                time.sleep(1)
+
+                # 뉴스 기사 제목 파악
+                title_find = str(repl_bs.find('h3', id="articleTitle"))
+                tf_title = title_find[134:]
+                total_title = tf_title.replace("</a></h3>","")
+                print(total_title)
+                # time.sleep(1)
+
+                # 기사 작성 일자 파악
+                time_find = repl_bs.find('span', class_="t11")
+                total_news_time = str(time_find).replace("<span class=\"t11\">","").replace("</span>","")
+                print(total_news_time)
+                # time.sleep(1)
+
+                # 기사 내 댓글 총 갯수 파악
+                repl_find = repl_bs.find('span', class_="u_cbox_count")
+                total_repl_no = str(repl_find).replace("<span class=\"u_cbox_count\">","").replace("</span>","")
+                print(total_repl_no)
+                # time.sleep(1)
+
+        except:
+            continue
+
+
+def main():
+
+    # test-data
+    search_item = "코로나"
+    start_date = "2020.03.19"
+    end_date = "2020.03.20"
+    search_page = 20
+
+    # 데이터 입력
+    # search_item = input("검색어를 입력하세요 : ")
+    # start_date = input("검색 시작 날짜를 입력하세요(YYYY.MM.DD) : ")
+    # end_date = input("검색 종료 날짜를 입력하세요(YYYY.MM.DD) : ")
+    # # max_news = input("검색할 뉴스의 비율(%)을 입력하세요 : ")
+
+    driver = webdriver.Chrome(cd_path)
+    s_date = start_date.replace(".","")
+    e_date = end_date.replace(".","")
+    search_url = "https://search.naver.com/search.naver?where=news&query=" \
+                 + search_item + "&sm=tab_opt&sort=0&photo=0&field=0&reporter_article=&pd=3&ds=" \
+                 + start_date + "&de=" \
+                 + end_date + "&docid=&nso=so%3Ar%2Cp%3Afrom" \
+                 + s_date + "to" \
+                 + e_date + "%2Ca%3Aall&mynews=1&refresh_start=0&related=0"
+
+    search_news(driver,search_url)
+
+    crawler(search_url,search_item,search_page,driver)
+
+    #make_data
+
+main()
+```
+
+### 1) 해결
+
+```
+1. 신문사 정보 크롤링
+2. 신문 기사 날짜 크롤링
+```
+
+### 2) 해결 중
+
+```
+
+```
+
+### 3) 앞으로 작업할 것
+
+```
 1. 파악한 댓글 중 긁어올 댓글 갯수 산정하기
 2. 산정한 댓글 크롤링
 3. 크롤링한 댓글 파일 저장
 ```
+
+
 
